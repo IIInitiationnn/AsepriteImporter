@@ -287,7 +287,7 @@ namespace UnityEditor.U2D.Aseprite
         }
 
         static string GetTransformPath(Transform transform, bool isMerged) {
-            if (isMerged) return "";
+            if (!isMerged) return "";
             var path = transform.name;
             if (transform.name == k_RootName)
                 return "";
