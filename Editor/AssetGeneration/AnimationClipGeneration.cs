@@ -16,7 +16,8 @@ namespace UnityEditor.U2D.Aseprite
             IReadOnlyList<Frame> frames,
             List<Tag> tags,
             Dictionary<int, GameObject> layerIdToGameObject,
-            bool generateIndividualEvents)
+            bool generateIndividualEvents,
+            bool isMerged)
         {
             var noOfFrames = file.noOfFrames;
             if (tags.Count == 0)
@@ -46,19 +47,38 @@ namespace UnityEditor.U2D.Aseprite
             var animationNames = new HashSet<string>(tags.Count);
             for (var i = 0; i < tags.Count; ++i)
             {
-                var clipName = tags[i].name;
-                if (animationNames.Contains(clipName))
-                {
-                    var nameIndex = 0;
-                    while (animationNames.Contains(clipName))
-                        clipName = $"{tags[i].name}_{nameIndex++}";
+                if (isMerged) {
+                    var clipName = tags[i].name;
+                    if (animationNames.Contains(clipName))
+                    {
+                        var nameIndex = 0;
+                        while (animationNames.Contains(clipName))
+                            clipName = $"{tags[i].name}_{nameIndex++}";
 
-                    Debug.LogWarning($"The animation clip name {tags[i].name} is already in use. Renaming to {clipName}.");
+                        Debug.LogWarning($"The animation clip name {tags[i].name} is already in use. Renaming to {clipName}.");
+                    }
+
+                    var clip = CreateClip( tags[i], clipName, layers, layersWithDisabledRenderer, layersWithCustomSortingOrder, frames, sprites, layerIdToGameObject, generateIndividualEvents, true);
+                    clips.Add(clip);
+                    animationNames.Add(clipName);
+                } else {
+                    foreach (var layer in layers) {
+                        var clipName = $"{tags[i].name}_{layer.name}";
+                        if (animationNames.Contains(clipName))
+                        {
+                            var nameIndex = 0;
+                            while (animationNames.Contains(clipName))
+                                clipName = $"{tags[i].name}_{layer.name}_{nameIndex++}";
+
+                            Debug.LogWarning($"The animation clip name {tags[i].name}_{layer.name} is already in use. Renaming to {clipName}.");
+                        }
+
+                        var emptyList = new List<Layer>();
+                        var clip = CreateClip(tags[i], clipName, new List<Layer> { layer }, emptyList, emptyList, frames, sprites, layerIdToGameObject, generateIndividualEvents, false);
+                        clips.Add(clip);
+                        animationNames.Add(clipName);
+                    }
                 }
-
-                var clip = CreateClip(tags[i], clipName, layers, layersWithDisabledRenderer, layersWithCustomSortingOrder, frames, sprites, layerIdToGameObject, generateIndividualEvents);
-                clips.Add(clip);
-                animationNames.Add(clipName);
             }
 
             return clips.ToArray();
@@ -141,7 +161,8 @@ namespace UnityEditor.U2D.Aseprite
             IReadOnlyList<Frame> frames,
             IReadOnlyList<Sprite> sprites,
             IReadOnlyDictionary<int, GameObject> layerIdToGameObject,
-            bool generateIndividualEvents)
+            bool generateIndividualEvents,
+            bool isMerged)
         {
             var animationClip = new AnimationClip()
             {
@@ -178,12 +199,12 @@ namespace UnityEditor.U2D.Aseprite
                 spriteKeyframes.Sort((x, y) => x.time.CompareTo(y.time));
                 DuplicateLastFrame(spriteKeyframes, frames[tag.toFrame - 1], animationClip.frameRate);
 
-                var path = GetTransformPath(layerTransform);
+                var path = GetTransformPath(layerTransform, isMerged);
                 var spriteBinding = EditorCurveBinding.PPtrCurve(path, typeof(SpriteRenderer), "m_Sprite");
                 AnimationUtility.SetObjectReferenceCurve(animationClip, spriteBinding, spriteKeyframes.ToArray());
 
-                AddEnabledKeyframes(layerTransform, tag, frames, doesLayerDisableRenderer, activeFrames, animationClip);
-                AddSortOrderKeyframes(layerTransform, layer, tag, frames, cells, doesLayerHaveCustomSorting, animationClip);
+                AddEnabledKeyframes(layerTransform, tag, frames, doesLayerDisableRenderer, activeFrames, animationClip, isMerged);
+                AddSortOrderKeyframes(layerTransform, layer, tag, frames, cells, doesLayerHaveCustomSorting, animationClip, isMerged);
                 AddAnimationEvents(tag, frames, animationClip, generateIndividualEvents);
             }
 
@@ -265,25 +286,25 @@ namespace UnityEditor.U2D.Aseprite
             keyFrames.Add(duplicatedFrame);
         }
 
-        static string GetTransformPath(Transform transform)
-        {
+        static string GetTransformPath(Transform transform, bool isMerged) {
+            if (isMerged) return "";
             var path = transform.name;
             if (transform.name == k_RootName)
                 return "";
             if (transform.parent.name == k_RootName)
                 return path;
 
-            var parentPath = GetTransformPath(transform.parent) + "/";
+            var parentPath = GetTransformPath(transform.parent, false) + "/";
             path = path.Insert(0, parentPath);
             return path;
         }
 
-        static void AddEnabledKeyframes(Transform layerTransform, Tag tag, IReadOnlyList<Frame> frames, bool doesLayerDisableRenderer, IReadOnlyCollection<int> activeFrames, AnimationClip animationClip)
+        static void AddEnabledKeyframes(Transform layerTransform, Tag tag, IReadOnlyList<Frame> frames, bool doesLayerDisableRenderer, IReadOnlyCollection<int> activeFrames, AnimationClip animationClip, bool isMerged)
         {
             if (activeFrames.Count == tag.noOfFrames && !doesLayerDisableRenderer)
                 return;
 
-            var path = GetTransformPath(layerTransform);
+            var path = GetTransformPath(layerTransform, isMerged);
             var enabledBinding = EditorCurveBinding.FloatCurve(path, typeof(SpriteRenderer), "m_Enabled");
             var enabledKeyframes = new List<Keyframe>();
 
@@ -322,7 +343,7 @@ namespace UnityEditor.U2D.Aseprite
             AnimationUtility.SetEditorCurve(animationClip, enabledBinding, animCurve);
         }
 
-        static void AddSortOrderKeyframes(Transform layerTransform, Layer layer, Tag tag, IReadOnlyList<Frame> frames, IReadOnlyList<Cell> cells, bool doesLayerHaveCustomSorting, AnimationClip animationClip)
+        static void AddSortOrderKeyframes(Transform layerTransform, Layer layer, Tag tag, IReadOnlyList<Frame> frames, IReadOnlyList<Cell> cells, bool doesLayerHaveCustomSorting, AnimationClip animationClip, bool isMerged)
         {
             var layerGo = layerTransform.gameObject;
             var spriteRenderer = layerGo.GetComponent<SpriteRenderer>();
@@ -330,7 +351,7 @@ namespace UnityEditor.U2D.Aseprite
                 return;
 
             var sortOrderKeyframes = new List<Keyframe>();
-            var path = GetTransformPath(layerTransform);
+            var path = GetTransformPath(layerTransform, isMerged);
             var sortOrderBinding = EditorCurveBinding.FloatCurve(path, typeof(SpriteRenderer), "m_SortingOrder");
 
             var startTime = GetTimeFromFrame(frames, tag.fromFrame);
