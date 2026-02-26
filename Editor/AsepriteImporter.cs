@@ -84,6 +84,8 @@ namespace UnityEditor.U2D.Aseprite
             customPivotPosition = new Vector2(0.5f, 0.5f),
             mosaicPadding = 4,
             spritePadding = 0,
+            spritePadToSize = false,
+            spritePadSize = 32,
             generateAnimationClips = true,
             generateModelPrefab = true,
             addSortingGroup = true,
@@ -215,7 +217,16 @@ namespace UnityEditor.U2D.Aseprite
                 var mosaicPad = m_AsepriteImporterSettings.mosaicPadding;
                 var spritePad = m_AsepriteImporterSettings.fileImportMode == FileImportModes.AnimatedSprite ? m_AsepriteImporterSettings.spritePadding : 0;
                 var requireSquarePotTexture = IsRequiringSquarePotTexture(ctx);
-                ImagePacker.Pack(imageBuffers.ToArray(), imageSizes.ToArray(), (int)mosaicPad, spritePad, requireSquarePotTexture, out var outputImageBuffer, out var packedTextureWidth, out var packedTextureHeight, out var spriteRects, out var uvTransforms);
+                NativeArray<Color32> outputImageBuffer;
+                int packedTextureWidth;
+                int packedTextureHeight;
+                RectInt[] spriteRects;
+                Vector2Int[] uvTransforms;
+                if (spritePadToSize) {
+                    ImagePacker.Pack(imageBuffers.ToArray(), imageSizes.ToArray(), (int) mosaicPad, (int) spritePadSize, requireSquarePotTexture, out outputImageBuffer, out packedTextureWidth, out packedTextureHeight, out spriteRects, out uvTransforms);
+                } else {
+                    ImagePacker.Pack(imageBuffers.ToArray(), imageSizes.ToArray(), (int) mosaicPad, spritePad, requireSquarePotTexture, out outputImageBuffer, out packedTextureWidth, out packedTextureHeight, out spriteRects, out uvTransforms);
+                }
 
                 var packOffsets = new Vector2Int[spriteRects.Length];
                 for (var i = 0; i < packOffsets.Length; ++i)
@@ -450,7 +461,7 @@ namespace UnityEditor.U2D.Aseprite
         {
             var newLayers = RestructureLayerAndCellData(in asepriteFile, canvasSize);
             FilterOutLayers(newLayers, includeHiddenLayers);
-            UpdateCellNames(newLayers, isMerged);
+            UpdateCellNames(ExtractTagsData(asepriteFile), newLayers, isMerged);
             return newLayers;
         }
 
@@ -604,15 +615,27 @@ namespace UnityEditor.U2D.Aseprite
             }
         }
 
-        static void UpdateCellNames(List<Layer> layers, bool isMerged)
-        {
-            for (var i = 0; i < layers.Count; ++i)
-            {
+        static void UpdateCellNames(List<Tag> tags, List<Layer> layers, bool isMerged) {
+            var shortestTag = new Dictionary<int, Tag>();
+            foreach (var tag in tags) {
+                for (var frameNum = tag.fromFrame; frameNum < tag.toFrame; frameNum++) {
+                    if (!shortestTag.ContainsKey(frameNum) || shortestTag[frameNum].noOfFrames > tag.noOfFrames) {
+                        shortestTag[frameNum] = tag;
+                    }
+                }
+                // Debug.Log($"{tag.name} {tag.fromFrame} {tag.toFrame}");
+            }
+
+            for (var i = 0; i < layers.Count; ++i) {
                 var cells = layers[i].cells;
-                for (var m = 0; m < cells.Count; ++m)
-                {
+                for (var m = 0; m < cells.Count; ++m) {
                     var cell = cells[m];
-                    cell.name = ImportUtilities.GetCellName(cell.name, cell.frameIndex, cells.Count, isMerged);
+                    if (shortestTag.TryGetValue(cell.frameIndex, out var tag)) {
+                        // Debug.Log($"{cell.name} {cell.frameIndex} {cells.Count}");
+                        cell.name = ImportUtilities.GetCellName(tag, cell.name, cell.frameIndex, cells.Count, isMerged);
+                    } else {
+                        cell.name = ImportUtilities.GetCellName(cell.name, cell.frameIndex, cells.Count, isMerged);
+                    }
                     cells[m] = cell;
                 }
             }
@@ -632,7 +655,7 @@ namespace UnityEditor.U2D.Aseprite
             else
             {
                 var assetName = System.IO.Path.GetFileNameWithoutExtension(assetPath);
-                ImportMergedLayers.Import(assetName, newLayers, out imageBuffers, out imageSizes);
+                ImportMergedLayers.Import(ExtractTagsData(asepriteFile), assetName, newLayers, out imageBuffers, out imageSizes);
 
                 // Update layers after merged, since merged import creates new layers.
                 // The new layers should be compared and merged together with the ones existing in the meta file.
@@ -930,6 +953,10 @@ namespace UnityEditor.U2D.Aseprite
                     var newMeta = newSpriteMeta[i];
                     var finalMeta = finalSpriteMeta.Find(x => x.spriteID == newMeta.spriteID);
 
+                    if (finalMeta != null) {
+                        finalMeta.name = newMeta.name;
+                    }
+
                     // Override previous pivot and sprite rect if:
                     // - Importer settings have been updated
                     // - OR
@@ -959,7 +986,9 @@ namespace UnityEditor.U2D.Aseprite
                    (pivotAlignment != m_PreviousAsepriteImporterSettings.defaultPivotAlignment ||
                     pivotSpace != m_PreviousAsepriteImporterSettings.defaultPivotSpace ||
                     customPivotPosition != m_PreviousAsepriteImporterSettings.customPivotPosition ||
-                    spritePadding != m_PreviousAsepriteImporterSettings.spritePadding);
+                    spritePadding != m_PreviousAsepriteImporterSettings.spritePadding ||
+                    spritePadToSize != m_PreviousAsepriteImporterSettings.spritePadToSize ||
+                    spritePadSize != m_PreviousAsepriteImporterSettings.spritePadSize);
         }
 
         SpriteMetaData CreateNewSpriteMetaData(
@@ -1178,7 +1207,8 @@ namespace UnityEditor.U2D.Aseprite
                 m_Frames,
                 m_Tags,
                 m_LayerIdToGameObject,
-                m_AsepriteImporterSettings.generateIndividualEvents);
+                m_AsepriteImporterSettings.generateIndividualEvents,
+                layerImportMode == LayerImportModes.MergeFrame);
 
             for (var i = 0; i < clips.Length; ++i)
                 ctx.AddObjectToAsset(clips[i].name, clips[i]);

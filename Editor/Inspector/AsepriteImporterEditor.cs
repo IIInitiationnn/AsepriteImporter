@@ -66,6 +66,8 @@ namespace UnityEditor.U2D.Aseprite
         SerializedProperty m_CustomPivotPosition;
         SerializedProperty m_MosaicPadding;
         SerializedProperty m_SpritePadding;
+        SerializedProperty m_SpritePadToSize;
+        SerializedProperty m_SpritePadSize;
 
         SerializedProperty m_GenerateModelPrefab;
         SerializedProperty m_AddSortingGroup;
@@ -177,6 +179,8 @@ namespace UnityEditor.U2D.Aseprite
             m_CustomPivotPosition = asepriteImporterSettings.FindPropertyRelative("m_CustomPivotPosition");
             m_MosaicPadding = asepriteImporterSettings.FindPropertyRelative("m_MosaicPadding");
             m_SpritePadding = asepriteImporterSettings.FindPropertyRelative("m_SpritePadding");
+            m_SpritePadToSize = asepriteImporterSettings.FindPropertyRelative("m_SpritePadToSize");
+            m_SpritePadSize = asepriteImporterSettings.FindPropertyRelative("m_SpritePadSize");
 
             m_GenerateModelPrefab = asepriteImporterSettings.FindPropertyRelative("m_GenerateModelPrefab");
             m_AddSortingGroup = asepriteImporterSettings.FindPropertyRelative("m_AddSortingGroup");
@@ -449,6 +453,25 @@ namespace UnityEditor.U2D.Aseprite
                 }
             }).Every(k_PollForChangesInternal);
             foldOut.Add(spritePaddingField);
+
+            var spritePadToSizeField = new PropertyField(m_SpritePadToSize, styles.spritePadToSize.text) {
+                tooltip = styles.spritePadToSize.tooltip
+            };
+            spritePadToSizeField.Bind(serializedObject);
+            foldOut.Add(spritePadToSizeField);
+
+            var isPaddingToSizeEnabled = m_SpritePadToSize.boolValue;
+            var spritePadSizeField = new PropertyField(m_SpritePadSize, styles.spritePadSize.text) {
+                tooltip = styles.spritePadSize.tooltip
+            };
+            spritePadSizeField.Bind(serializedObject);
+            spritePadSizeField.schedule.Execute(() => {
+                isPaddingToSizeEnabled = m_SpritePadToSize.boolValue;
+                if (spritePadSizeField.enabledSelf != isPaddingToSizeEnabled)
+                    spritePadSizeField.SetEnabled(isPaddingToSizeEnabled);
+            }).Every(k_PollForChangesInternal);
+            spritePadSizeField.SetEnabled(isPaddingToSizeEnabled);
+            foldOut.Add(spritePadSizeField);
 
             var paddingElement = new VisualElement()
             {
@@ -1662,6 +1685,8 @@ namespace UnityEditor.U2D.Aseprite
             public readonly GUIContent customPivotPosition = EditorGUIUtility.TrTextContent("Custom Pivot Position", "Input the normalized position of the Sprite pivots. The position will be calculated based on the Pivot Space.");
             public readonly GUIContent mosaicPadding = EditorGUIUtility.TrTextContent("Mosaic Padding", "External padding between each SpriteRect, in pixels.");
             public readonly GUIContent spritePadding = EditorGUIUtility.TrTextContent("Sprite Padding", "Internal padding within each SpriteRect, in pixels.");
+            public readonly GUIContent spritePadToSize = EditorGUIUtility.TrTextContent("Sprite Pad to Size", "Whether to pad to a specific size");
+            public readonly GUIContent spritePadSize = EditorGUIUtility.TrTextContent("Sprite Pad Size", "Internal padding to this size, in pixels.");
 
             public readonly List<string> spriteAlignmentOptions = new()
             {

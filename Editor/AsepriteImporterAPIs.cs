@@ -182,6 +182,18 @@ namespace UnityEditor.U2D.Aseprite
             set => m_AsepriteImporterSettings.spritePadding = value;
         }
 
+        public bool spritePadToSize
+        {
+            get => m_AsepriteImporterSettings.spritePadToSize;
+            set => m_AsepriteImporterSettings.spritePadToSize = value;
+        }
+
+        public uint spritePadSize
+        {
+            get => m_AsepriteImporterSettings.spritePadSize;
+            set => m_AsepriteImporterSettings.spritePadSize = value;
+        }
+
         /// <summary>
         /// Generate a Model Prefab based on the layers of the source asset.
         /// </summary>

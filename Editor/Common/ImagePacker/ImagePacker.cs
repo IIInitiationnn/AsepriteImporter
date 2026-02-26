@@ -98,6 +98,51 @@ namespace UnityEditor.U2D.Aseprite.Common
             }
         }
 
+        // my own custom version where we force the sprites to a specific size
+        public static void Pack(NativeArray<Color32>[] buffers, int2[] size, int padding, int spriteSize, bool requireSquarePOT, out NativeArray<Color32> outPackedBuffer, out int outPackedBufferWidth, out int outPackedBufferHeight, out RectInt[] outPackedRect, out Vector2Int[] outUVTransform)
+        {
+            UnityEngine.Profiling.Profiler.BeginSample("Pack");
+            // Determine the area that contains data in the buffer
+            outPackedBuffer = default(NativeArray<Color32>);
+            try
+            {
+                var tightRects = FindTightRectJob.Execute(buffers, size);
+                var tightRectArea = new RectInt[tightRects.Length];
+                for (var i = 0; i < tightRects.Length; ++i)
+                {
+                    var t = tightRects[i];
+                    t.width = spriteSize;
+                    t.height = spriteSize;
+                    tightRectArea[i] = t;
+                }
+                Pack(tightRectArea, padding, requireSquarePOT, out outPackedRect, out outPackedBufferWidth, out outPackedBufferHeight);
+                var packBufferSize = (ulong)outPackedBufferWidth * (ulong)outPackedBufferHeight;
+
+                if (packBufferSize < 0 || packBufferSize >= int.MaxValue)
+                {
+                    throw new ArgumentException("Unable to create pack texture. Image size is too big to pack.");
+                }
+                outUVTransform = new Vector2Int[tightRectArea.Length];
+                for (var i = 0; i < outUVTransform.Length; ++i)
+                {
+                    outUVTransform[i] = new Vector2Int(outPackedRect[i].x - tightRects[i].x, outPackedRect[i].y - tightRects[i].y);
+                }
+                outPackedBuffer = new NativeArray<Color32>(outPackedBufferWidth * outPackedBufferHeight, Allocator.Persistent);
+
+                Blit(outPackedBuffer, outPackedRect, outPackedBufferWidth, buffers, tightRects, size, padding);
+            }
+            catch (Exception ex)
+            {
+                if (outPackedBuffer.IsCreated)
+                    outPackedBuffer.Dispose();
+                throw ex;
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
+        }
+
         static ImagePackNode InternalPack(RectInt[] rects, int padding, bool requireSquarePOT)
         {
             if (rects == null || rects.Length == 0)

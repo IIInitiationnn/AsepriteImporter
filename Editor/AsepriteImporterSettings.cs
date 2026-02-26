@@ -62,6 +62,20 @@ namespace UnityEditor.U2D.Aseprite
             set => m_SpritePadding = value;
         }
 
+        [SerializeField] bool m_SpritePadToSize;
+        public bool spritePadToSize
+        {
+            get => m_SpritePadToSize;
+            set => m_SpritePadToSize = value;
+        }
+
+        [SerializeField] uint m_SpritePadSize;
+        public uint spritePadSize
+        {
+            get => m_SpritePadSize;
+            set => m_SpritePadSize = value;
+        }
+
         [SerializeField] bool m_GenerateModelPrefab;
         public bool generateModelPrefab
         {
@@ -140,6 +154,8 @@ namespace UnityEditor.U2D.Aseprite
                 hashCode = (hashCode * 397) ^ m_CustomPivotPosition.GetHashCode();
                 hashCode = (hashCode * 397) ^ (int) m_MosaicPadding;
                 hashCode = (hashCode * 397) ^ (int) m_SpritePadding;
+                hashCode = (hashCode * 397) ^ m_SpritePadToSize.GetHashCode();
+                hashCode = (hashCode * 397) ^ (int) m_SpritePadSize;
                 hashCode = (hashCode * 397) ^ m_GenerateModelPrefab.GetHashCode();
                 hashCode = (hashCode * 397) ^ m_GenerateAnimationClips.GetHashCode();
                 hashCode = (hashCode * 397) ^ m_AddSortingGroup.GetHashCode();

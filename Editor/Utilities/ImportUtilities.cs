@@ -265,6 +265,12 @@ namespace UnityEditor.U2D.Aseprite
             return isMerged ? $"Frame_{frameIndex}" : $"{baseName}_Frame_{frameIndex}";
         }
 
+        public static string GetCellName(Tag tag, string baseName, int frameIndex, int noOfFrames, bool isMerged) {
+            if (noOfFrames == 1) return baseName;
+            if (isMerged) return $"{tag.name}_Frame_{frameIndex - tag.fromFrame}";
+            return $"{tag.name}_{baseName}_Frame_{frameIndex - tag.fromFrame}";
+        }
+
         public static void DisposeIfCreated<T>(this NativeArray<T> arr) where T : struct
         {
             if (arr == default || !arr.IsCreated)

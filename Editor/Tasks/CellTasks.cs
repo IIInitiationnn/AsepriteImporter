@@ -86,8 +86,17 @@ namespace UnityEditor.U2D.Aseprite
             return cellsPerFrame;
         }
 
-        public static List<Cell> MergeCells(IReadOnlyDictionary<int, List<Cell>> cellsPerFrame, string cellName)
-        {
+        public static List<Cell> MergeCells(List<Tag> tags, in Dictionary<int, List<Cell>> cellsPerFrame, string cellName) {
+            var shortestTag = new Dictionary<int, Tag>();
+            foreach (var tag in tags) {
+                for (var frameNum = tag.fromFrame; frameNum < tag.toFrame; frameNum++) {
+                    if (!shortestTag.ContainsKey(frameNum) || shortestTag[frameNum].noOfFrames > tag.noOfFrames) {
+                        shortestTag[frameNum] = tag;
+                    }
+                }
+                // Debug.Log($"{tag.name} {tag.fromFrame} {tag.toFrame}");
+            }
+
             var mergedCells = new List<Cell>(cellsPerFrame.Count);
             foreach (var (frameIndex, cells) in cellsPerFrame)
             {
@@ -107,12 +116,13 @@ namespace UnityEditor.U2D.Aseprite
                     }
 
                     TextureTasks.MergeTextures(in textures, in cellRects, in cellBlendModes, out var output);
-                    var mergedCell = new Cell()
-                    {
+                    var mergedCell = new Cell {
                         cellRect = output.rect,
                         image = output.image,
                         frameIndex = frameIndex,
-                        name = ImportUtilities.GetCellName(cellName, frameIndex, cellsPerFrame.Count, true),
+                        name = shortestTag.TryGetValue(frameIndex, out var tag)
+                            ? ImportUtilities.GetCellName(tag, cellName, frameIndex, cellsPerFrame.Count, true)
+                            : ImportUtilities.GetCellName(cellName, frameIndex, cellsPerFrame.Count, true),
                         spriteId = GUID.Generate()
                     };
                     mergedCells.Add(mergedCell);
